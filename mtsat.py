@@ -1,37 +1,51 @@
 # mtsat.py
 
 import json
-
-config = "./mtsat.conf"
+import asyncio
+from mtapi import hlapi
 
 class mtsat:
-    groups = {}
+    loop = None
     routers = {}
-    commands = {}
+    groups = {}
+    connected = {}
     
     @classmethod
-    def parse_config(cls):
+    def parse_config(cls,config):
         mt_config = []
+        routers = {}
+        groups = {}
         with open(config, 'r') as conf:
             mt_config = json.load(conf)
 
-        cls.groups = mt_config.get("groups")
-        cls.routers = mt_config.get("routers")
+        routers = mt_config.get("routers")
+        groups = mt_config.get("groups")
+        return routers, groups
     
     @classmethod
     def parse_input(cls, in_file):
+        commands = []
         with open(in_file, 'r') as _if:
+            prev_ip = None
             for cmd_line in _if:
                 action = ip = group = None
                 if 'flush' in cmd_line:
-                    cls.commands.update({"flush": None})
+                    commands.append(
+                        {"action": "flush",
+                         "ip": None,
+                         "group": None})
                 else:
                     action, ip, group = cmd_line.strip().split(':')
-                    if cls.commands.get(ip, None):
-                        del cls.commands[ip]
+                    if ip == prev_ip:
+                        commands.pop()
                     else:
-                        cls.commands.update(
-                            {ip: {"action": action, "group": group}})
+                        commands.append(
+                            {"action": action,
+                             "ip": ip,
+                             "group": group})
+                    prev_ip = ip
+
+        return commands
 
     @classmethod
     def flush(cls):
@@ -46,14 +60,63 @@ class mtsat:
         pass
 
     @classmethod
-    def print_config(cls):
-        print(cls.groups)
-        print(cls.routers)
+    def send_to_all(cls, command):
+        print("Sending to all routers: {}".format(command["action"]))
 
-def main():
-    in_file = "test_input.txt"
-    mtsat.parse_input(in_file)
+    @classmethod
+    def add_to_ipfw_list(cls, router, list_name, ip):
+        pass
+
+    @classmethod
+    def remove_from_ipfw_list(cls, router, list_name, ip):
+        pass
+
+    @classmethod
+    def router_task(cls, r_name, *commands):
+        print(
+            "Connecting to router: {}".format(
+                r_name))
+        print(
+            "Sending '{} {}' to {}".format(
+                command["action"], command["ip"], r_name))
+
+    @classmethod
+    def main_task(cls, commands):
+        cmd_per_router = {}
+        for command in commands:
+            if not command["group"]:
+                # send command to all routers
+                cls.send_to_all(command)
+            else:
+                r_name = cls.groups[command["group"]]
+                router = cls.connected.get(r_name, None)
+                if router:
+                    print("Sending {} to {}".format(
+                        command["action"]+" "+command["ip"], r_name))
+                else:
+                    print("Connecting to {}".format(r_name))
+                    cls.connected.update({r_name: "connected"})
+                    print("Sending {} to {}".format(
+                        command["action"]+" "+command["ip"], r_name))
+
+    @classmethod
+    def run(cls, config, in_file):
+        # getting config and command file
+        try:
+            cls.routers, cls.groups = cls.parse_config(config)
+        except FileNotFoundError as e:
+            print(e)
+
+        try:
+            commands = cls.parse_input(in_file)
+        except FileNotFoundError as e:
+            print(e)
+
+        print(cls.routers, cls.groups)
+        print("Running...")
+        cls.main_task(commands)
 
 if __name__ == "__main__":
-    main()
-
+    config = "dev_mtsat.conf"
+    in_file = "test_input.txt"
+    mtsat.run(config, in_file)
