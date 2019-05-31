@@ -3,4 +3,5 @@ __pycache__
 *.swp
 /venv
 /mtapi.egg-info
-dev_mtsat.conf
+dev*.conf
+dev*.txt

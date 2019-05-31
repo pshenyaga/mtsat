@@ -1,18 +1,16 @@
 # mtsat.py
-
 import json
 import asyncio
-from mtapi import hlapi
+from mtapi import asyncapi as amtapi
 from mtapi import error as mt_error
-
-import random
+from router import Router
 
 class mtsat:
     loop = None
     routers = {}
     groups = {}
     connected = {}
-    
+
     @classmethod
     def parse_config(cls,config):
         mt_config = []
@@ -25,6 +23,7 @@ class mtsat:
         groups = mt_config.get("groups")
         return routers, groups
     
+
     @classmethod
     def parse_input(cls, in_file):
         commands = []
@@ -50,6 +49,7 @@ class mtsat:
 
         return commands
 
+
     @classmethod
     def flush(cls):
         pass
@@ -57,6 +57,7 @@ class mtsat:
     @classmethod
     def allow(cls):
         pass
+
 
     @classmethod
     def deny(cls):
@@ -76,27 +77,36 @@ class mtsat:
 
     @classmethod
     async def router_task(cls, r_name, *commands):
-        router = hlapi.HlAPI(cls.loop)
-        router.set_debug(debug=True)
+        router = None
         print(cls.routers[r_name])
         try:
-            await asyncio.wait_for(
-                router.connect(**cls.routers[r_name]),
-                timeout = 5)
-        except mt_error.FatalError as e:
-            print("Connection closed.")
-        except mt_error.TrapError as e:
-            print(e)
-        except asyncio.futures.TimeoutError:
-            print("Time out.")
-        else:
-            for command in commands:
-                action, ip = command
-                print("Sending '{} {}' to {}".format(
-                    action, ip, r_name))
-                await asyncio.sleep(random.randint(1,3))
-        finally:
-            await router.close()
+            async with Router(
+                cls.loop, debug=True, **cls.routers[r_name]) as router:
+                for command in commands:
+                    action, ip = command
+                    await router.commands[action](ip)
+        except:
+            raise
+#        try:
+#            router = await amtapi.connect(
+#                cls.loop, debug=True, **cls.routers[r_name])
+#        except mt_error.FatalError as e:
+#            print("Connection closed.")
+#        except mt_error.TrapError as e:
+#            print(e)
+#        except asyncio.futures.TimeoutError:
+#            print("Time out.")
+#        except OSError as e:
+#            print(e)
+#        else:
+#            for command in commands:
+#                action, ip = command
+#                print("Sending '{} {}' to {}".format(
+#                    action, ip, r_name))
+#                await asyncio.sleep(random.randint(1,3))
+#        finally:
+#            if router:
+#                await router.close()
 
     @classmethod
     async def main_task(cls, commands,):
@@ -123,8 +133,6 @@ class mtsat:
             cls.router_task(rname, *rcommands)
             for rname, rcommands in cmds_per_router.items()]
         await asyncio.gather(*tasks, loop=cls.loop)
-        #for rname, rcommands in cmds_per_router.items():
-        #    cls.router_task(rname, *rcommands)
 
     @classmethod
     def run(cls, config, in_file):
@@ -133,17 +141,23 @@ class mtsat:
             cls.routers, cls.groups = cls.parse_config(config)
         except FileNotFoundError as e:
             print(e)
+            return
 
         try:
             commands = cls.parse_input(in_file)
         except FileNotFoundError as e:
             print(e)
+            return
 
         print("Running...")
         cls.loop = asyncio.get_event_loop()
-        cls.loop.run_until_complete(cls.main_task(commands))
+        try:
+            cls.loop.run_until_complete(cls.main_task(commands))
+        except KeyboardInterrupt as e:
+            for task in asyncio.Task.all_tasks():
+                task.cancel()
 
 if __name__ == "__main__":
     config = "dev_mtsat.conf"
-    in_file = "test_input.txt"
+    in_file = "test_deny.txt"
     mtsat.run(config, in_file)
