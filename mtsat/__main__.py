@@ -1,0 +1,3 @@
+import mtsat
+
+mtsat.main()

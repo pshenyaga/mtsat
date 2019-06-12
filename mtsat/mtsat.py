@@ -138,7 +138,7 @@ class mtsat:
             for task in asyncio.Task.all_tasks():
                 task.cancel()
 
-if __name__ == "__main__":
+def main():
     logging.basicConfig(
         filename = LOGFILE,
         format = LOG_FORMAT,
