@@ -1,15 +1,28 @@
 # mtsat.py
+import sys
 import json
 import asyncio
+import logging
 from mtapi import asyncapi as amtapi
 from mtapi import error as mt_error
 from router import Router
 
+CONFIG = "dev_mtsat.conf"
+DEBUG = True
+# LOGFILE = 'mtsat.log'
+LOGFILE = None
+LOG_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+DATE_TIME_FORMAT = '%Y-%m-%d %H:%M:%S'
+
+
 class mtsat:
     loop = None
+    timeout = 5
     routers = {}
     groups = {}
-    connected = {}
+    logger = logging.getLogger('mtsat')
+    logger.setLevel(logging.WARN)
+
 
     @classmethod
     def parse_config(cls,config):
@@ -51,66 +64,28 @@ class mtsat:
 
 
     @classmethod
-    def flush(cls):
-        pass
-
-    @classmethod
-    def allow(cls):
-        pass
-
-
-    @classmethod
-    def deny(cls):
-        pass
-
-    @classmethod
-    def send_to_all(cls, command):
-        print("Sending to all routers: {}".format(command["action"]))
-
-    @classmethod
-    def add_to_ipfw_list(cls, router, list_name, ip):
-        pass
-
-    @classmethod
-    def remove_from_ipfw_list(cls, router, list_name, ip):
-        pass
-
-    @classmethod
     async def router_task(cls, r_name, *commands):
         router = None
-        print(cls.routers[r_name])
         try:
             async with Router(
                 cls.loop, debug=True, **cls.routers[r_name]) as router:
                 for command in commands:
                     action, ip = command
                     await router.commands[action](ip)
-        except:
-            raise
-#        try:
-#            router = await amtapi.connect(
-#                cls.loop, debug=True, **cls.routers[r_name])
-#        except mt_error.FatalError as e:
-#            print("Connection closed.")
-#        except mt_error.TrapError as e:
-#            print(e)
-#        except asyncio.futures.TimeoutError:
-#            print("Time out.")
-#        except OSError as e:
-#            print(e)
-#        else:
-#            for command in commands:
-#                action, ip = command
-#                print("Sending '{} {}' to {}".format(
-#                    action, ip, r_name))
-#                await asyncio.sleep(random.randint(1,3))
-#        finally:
-#            if router:
-#                await router.close()
+        except asyncio.TimeoutError as e:
+            cls.logger.error("{}: connection timeout".format(r_name))
+        except mt_error.FatalError as e:
+            cls.logger.error("{}: connection closed.".format(r_name))
+        except mt_error.TrapError as e:
+            cls.logger.error("{}: {}".format(r_name, e))
+        except OSError as e:
+            cls.logger.error("{}: {}".format(r_name, e))
+
 
     @classmethod
     async def main_task(cls, commands,):
         cmds_per_router = {}
+        unknown_groups = set()
         def add_command(rname, command):
             nonlocal cmds_per_router
             if not cmds_per_router.get(rname, None):
@@ -126,8 +101,15 @@ class mtsat:
                 for rname in cls.routers.keys():
                     add_command(rname, command)
             else:
-                rname = cls.groups[command["group"]]
-                add_command(rname, command)
+                group = command["group"]
+                if group in unknown_groups:
+                    continue
+                rname = cls.groups.get(group)
+                if rname:
+                    add_command(rname, command)
+                else:
+                    unknown_groups.add(group)
+                    cls.logger.error("Unknown group: {}".format(group))
 
         tasks = [
             cls.router_task(rname, *rcommands)
@@ -140,16 +122,15 @@ class mtsat:
         try:
             cls.routers, cls.groups = cls.parse_config(config)
         except FileNotFoundError as e:
-            print(e)
+            cls.logger.critical(e)
             return
 
         try:
             commands = cls.parse_input(in_file)
         except FileNotFoundError as e:
-            print(e)
+            cls.logger.critical(e)
             return
 
-        print("Running...")
         cls.loop = asyncio.get_event_loop()
         try:
             cls.loop.run_until_complete(cls.main_task(commands))
@@ -158,6 +139,14 @@ class mtsat:
                 task.cancel()
 
 if __name__ == "__main__":
-    config = "dev_mtsat.conf"
-    in_file = "test_deny.txt"
-    mtsat.run(config, in_file)
+    logging.basicConfig(
+        filename = LOGFILE,
+        format = LOG_FORMAT,
+        datefmt= DATE_TIME_FORMAT)
+    mtsat.logger.setLevel(
+        logging.DEBUG) if DEBUG else mtsat.logger.setLevel(logging.WARN)
+    if len(sys.argv) > 1:
+        in_file = sys.argv[1]
+        mtsat.run(CONFIG, in_file)
+    else:
+        mtsat.logger.critical("No input file specified")

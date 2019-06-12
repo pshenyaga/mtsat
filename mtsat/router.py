@@ -1,5 +1,6 @@
 # router.py
 import asyncio
+import logging
 from mtapi import asyncapi as amtapi
 
 import random
@@ -10,7 +11,8 @@ class Router():
                  port='8728',
                  username='admin',
                  password='',
-                 ipfw_list='sat_test'):
+                 ipfw_list='sat_test',
+                 timeout=5):
 
         self.loop = loop if loop else asyncio.get_event_loop()
         self.debug = False
@@ -22,23 +24,19 @@ class Router():
 
         self.api = amtapi.API(self.loop)
         self.api.set_debug(self.debug)
+        self.timeout=timeout
         self.commands = {'flush': self.flush,
                          'allow': self.allow,
                          'deny': self.deny}
+        self.logger = logging.getLogger('mtsat.router')
           
 
     async def __aenter__(self):
-        try:
-            await self.api.connect(self.address, self.port)
-        except:
-            raise
-        else:
-            try:
-                await self.api.login(self.user, self.password)
-            except:
-                raise
-            else:
-                return self
+        await asyncio.wait_for(
+            self.api.connect(self.address, self.port), timeout=self.timeout)
+        await asyncio.wait_for(
+            self.api.login(self.user, self.password), timeout=self.timeout)
+        return self
 
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
@@ -51,52 +49,53 @@ class Router():
             if status == '!re':
                 ids.append(data['.id'])
             elif status == '!trap':
-                print("router {}: remove: {}".format(
-                    self.address, data('message')))
-                return
-        response = await self.api.talk(
+                self.logger.debug("{}: remove: {}".format(
+                    self.address, data['message']))
+                continue
+        response = await asyncio.wait_for(self.api.talk(
             '/ip/firewall/address-list/remove',
-            '=.id='+','.join(ids))
+            '=.id='+','.join(ids)), timeout = self.timeout)
         return ids
 
 
     async def flush(self, ip):
-        # /ip/firewall/address-list/print ?list=sat_test
         ids = []
-        response = await self.api.talk(
+        response = await asyncio.wait_for(self.api.talk(
             '/ip/firewall/address-list/print',
             '=.proplist=.id',
-            '?list='+self.ipfw_list)
+            '?list='+self.ipfw_list), timeout=self.timeout)
 
-        print("router {}: flush".format(
+        self.logger.debug("{}: flush".format(
             self.address))
         ids = await self.remove_from_ipfw_list(response)
-        print(ids)
-
 
     async def allow(self, ip):
-        response = await self.api.talk(
+        response = await asyncio.wait_for(self.api.talk(
             '/ip/firewall/address-list/add',
             '=list='+self.ipfw_list,
-            '=address='+ip)
-        print("router {}: allow {} {}".format(
-            self.address, ip, response))
+            '=address='+ip), timeout=self.timeout)
+        status, data = response[0]
+        if status == '!done':
+            self.logger.debug("{}: allow {}".format(
+                self.address, ip))
+        else:
+            self.logger.warning("{}: allow {} - {}".format(
+                self.address, ip, data['message']))
 
 
     async def deny(self, ip):
-        # /ip/firewall/address-list/remove =.id=*3,*5
-        response = await self.api.talk(
+        response = await asyncio.wait_for(self.api.talk(
             '/ip/firewall/address-list/print',
             '=.proplist=.id',
             '?address='+ip,
-            '?list='+self.ipfw_list)
-        removed_ids = await self.remove_from_ipfw_list(response)        
+            '?list='+self.ipfw_list), timeout=self.timeout)
+        removed_id = await self.remove_from_ipfw_list(response)        
 
-        if (removed_ids):
-            print("router {}: deny {}".format(
+        if (removed_id):
+            self.logger.debug("{}: deny {}".format(
                 self.address, ip))
-            print(removed_ids)
+            self.logger.debug(removed_id)
         else:
-            print("router {}: deny {} no such ip".format(
+            self.logger.warning("{}: deny {} no such ip".format(
                 self.address, ip))
 

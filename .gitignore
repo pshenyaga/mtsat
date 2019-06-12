@@ -3,5 +3,8 @@ __pycache__
 *.swp
 /venv
 /mtapi.egg-info
+/conf
+/log
+/test_inputs
 dev*.conf
 dev*.txt
