@@ -5,12 +5,11 @@ import asyncio
 import logging
 from mtapi import asyncapi as amtapi
 from mtapi import error as mt_error
-from router import Router
+from . router import Router
 
-CONFIG = "dev_mtsat.conf"
+CONFIG = "/usr/local/etc/mtsat.conf"
+LOGFILE = "/var/log/mtsat.log"
 DEBUG = True
-# LOGFILE = 'mtsat.log'
-LOGFILE = None
 LOG_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 DATE_TIME_FORMAT = '%Y-%m-%d %H:%M:%S'
 
@@ -20,6 +19,8 @@ class mtsat:
     timeout = 5
     routers = {}
     groups = {}
+    ipfw_list_name="NODENY-ALLOW"
+    debug = False
     logger = logging.getLogger('mtsat')
     logger.setLevel(logging.WARN)
 
@@ -27,15 +28,12 @@ class mtsat:
     @classmethod
     def parse_config(cls,config):
         mt_config = []
-        routers = {}
-        groups = {}
         with open(config, 'r') as conf:
             mt_config = json.load(conf)
 
-        routers = mt_config.get("routers")
-        groups = mt_config.get("groups")
-        return routers, groups
-    
+        cls.routers = mt_config.get("routers", {})
+        cls.groups = mt_config.get("groups", {})
+        
 
     @classmethod
     def parse_input(cls, in_file):
@@ -68,7 +66,10 @@ class mtsat:
         router = None
         try:
             async with Router(
-                cls.loop, debug=True, **cls.routers[r_name]) as router:
+                cls.loop,
+                debug=cls.debug,
+                ipfw_list=cls.ipfw_list_name,
+                **cls.routers[r_name]) as router:
                 for command in commands:
                     action, ip = command
                     await router.commands[action](ip)
@@ -118,9 +119,8 @@ class mtsat:
 
     @classmethod
     def run(cls, config, in_file):
-        # getting config and command file
         try:
-            cls.routers, cls.groups = cls.parse_config(config)
+            cls.parse_config(config)
         except FileNotFoundError as e:
             cls.logger.critical(e)
             return
@@ -147,6 +147,7 @@ def main():
         logging.DEBUG) if DEBUG else mtsat.logger.setLevel(logging.WARN)
     if len(sys.argv) > 1:
         in_file = sys.argv[1]
+        mtsat.debug = DEBUG
         mtsat.run(CONFIG, in_file)
     else:
         mtsat.logger.critical("No input file specified")

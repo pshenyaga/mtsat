@@ -16,6 +16,9 @@ with open("README.md", "r") as fh:
         classifiers=[
             "Programming Language :: Python :: 3.6",
             "License :: OSI Approved :: GNU GPLv3",
-            "Operating System :: OS Independent",
+            "Operating System :: OS Independent"
+        ],
+        install_requires=[
+            'mtapi @ git+https://github.com/pshenyaga/mtapi#egg=mtapi-0.0.1' 
         ],
     )

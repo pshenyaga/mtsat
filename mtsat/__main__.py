@@ -1,3 +1,3 @@
-import mtsat
+from . import mtsat
 
 mtsat.main()
