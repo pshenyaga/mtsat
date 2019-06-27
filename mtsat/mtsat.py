@@ -105,9 +105,12 @@ class mtsat:
                 group = command["group"]
                 if group in unknown_groups:
                     continue
-                rname = cls.groups.get(group)
-                if rname:
-                    add_command(rname, command)
+                rnames = cls.groups.get(group)
+                if rnames:
+                    if not isinstance(rnames, list):
+                        rnames = list((rnames,))
+                    for rname in rnames:
+                        add_command(rname, command)
                 else:
                     unknown_groups.add(group)
                     cls.logger.error("Unknown group: {}".format(group))
