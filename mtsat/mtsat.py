@@ -9,7 +9,6 @@ from . router import Router
 
 CONFIG = "/usr/local/etc/mtsat.conf"
 LOGFILE = "/var/log/mtsat.log"
-DEBUG = True
 LOG_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 DATE_TIME_FORMAT = '%Y-%m-%d %H:%M:%S'
 
@@ -19,10 +18,9 @@ class mtsat:
     timeout = 5
     routers = {}
     groups = {}
-    ipfw_list_name="NODENY-ALLOW"
-    debug = False
+    ipfw_list=""
+    debug = False;
     logger = logging.getLogger('mtsat')
-    logger.setLevel(logging.WARN)
 
 
     @classmethod
@@ -30,6 +28,13 @@ class mtsat:
         mt_config = []
         with open(config, 'r') as conf:
             mt_config = json.load(conf)
+
+        opt = mt_config.get("options", {})
+        cls.ipfw_list = opt.get("ipfw_list", "NODENY-ALLOW")
+        cls.debug = opt.get("debug", False)
+        cls.logger.setLevel(
+            logging.DEBUG) if cls.debug else cls.logger.setLevel(logging.WARN)
+
 
         cls.routers = mt_config.get("routers", {})
         cls.groups = mt_config.get("groups", {})
@@ -68,7 +73,7 @@ class mtsat:
             async with Router(
                 cls.loop,
                 debug=cls.debug,
-                ipfw_list=cls.ipfw_list_name,
+                ipfw_list=cls.ipfw_list,
                 **cls.routers[r_name]) as router:
                 for command in commands:
                     action, ip = command
@@ -146,11 +151,8 @@ def main():
         filename = LOGFILE,
         format = LOG_FORMAT,
         datefmt= DATE_TIME_FORMAT)
-    mtsat.logger.setLevel(
-        logging.DEBUG) if DEBUG else mtsat.logger.setLevel(logging.WARN)
     if len(sys.argv) > 1:
         in_file = sys.argv[1]
-        mtsat.debug = DEBUG
         mtsat.run(CONFIG, in_file)
     else:
         mtsat.logger.critical("No input file specified")

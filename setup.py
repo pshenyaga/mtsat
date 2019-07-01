@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
     setuptools.setup(
         name="mtsat",
-        version="0.0.1",
+        version="0.0.2",
         author="Oleksii Pshenychnyi",
         author_email="afw@afw.net.ua",
         description="Mikrotik routers control script for Nodeny",
