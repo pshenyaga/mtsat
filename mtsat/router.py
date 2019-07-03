@@ -52,9 +52,10 @@ class Router():
                 self.logger.debug("{}: remove: {}".format(
                     self.address, data['message']))
                 continue
-        response = await asyncio.wait_for(self.api.talk(
-            '/ip/firewall/address-list/remove',
-            '=.id='+','.join(ids)), timeout = self.timeout)
+        for i in range(0, len(ids), 1000):
+            response = await asyncio.wait_for(self.api.talk(
+                '/ip/firewall/address-list/remove',
+                '=.id='+','.join(ids[i:i+1000])), timeout = self.timeout)
         return ids
 
 
