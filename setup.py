@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
     setuptools.setup(
         name="mtsat",
-        version="0.0.2",
+        version="0.0.3",
         author="Oleksii Pshenychnyi",
         author_email="afw@afw.net.ua",
         description="Mikrotik routers control script for Nodeny",
@@ -19,6 +19,6 @@ with open("README.md", "r") as fh:
             "Operating System :: OS Independent"
         ],
         install_requires=[
-            'mtapi @ git+https://github.com/pshenyaga/mtapi#egg=mtapi-0.0.1' 
+            'mtapi @ git+https://github.com/pshenyaga/mtapi#egg=mtapi-0.0.1'
         ],
     )

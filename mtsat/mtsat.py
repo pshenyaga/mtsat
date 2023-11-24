@@ -77,6 +77,7 @@ class mtsat:
                 **cls.routers[r_name]) as router:
                 for command in commands:
                     action, ip = command
+                    #@wait asyncio.wait_for(router.commands[action](ip), 1.0)
                     await router.commands[action](ip)
         except asyncio.TimeoutError as e:
             cls.logger.error("{}: connection timeout".format(r_name))
@@ -85,6 +86,8 @@ class mtsat:
         except mt_error.TrapError as e:
             cls.logger.error("{}: {}".format(r_name, e))
         except OSError as e:
+            cls.logger.error("{}: {}".format(r_name, e))
+        except Exception as e:
             cls.logger.error("{}: {}".format(r_name, e))
 
 

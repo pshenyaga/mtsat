@@ -15,7 +15,7 @@ class Router():
                  timeout=5):
 
         self.loop = loop if loop else asyncio.get_event_loop()
-        self.debug = False
+        self.debug = debug
         self.address = address
         self.port = port
         self.user = username
@@ -23,6 +23,7 @@ class Router():
         self.ipfw_list = ipfw_list
 
         self.api = amtapi.API(self.loop)
+        #self.api.set_debug(True)
         self.api.set_debug(self.debug)
         self.timeout=timeout
         self.commands = {'flush': self.flush,
@@ -52,15 +53,22 @@ class Router():
                 self.logger.debug("{}: remove: {}".format(
                     self.address, data['message']))
                 continue
-        for i in range(0, len(ids), 1000):
+        #for i in range(0, len(ids), 1000):
+        for i in range(0, len(ids)):
+            self.logger.debug("{}: remove_from_ipfw_list: removing id: {}".format(self.address, ids[i]))
+            #response = await asyncio.wait_for(self.api.talk(
+            #    '/ip/firewall/address-list/remove',
+            #    '=.id='+','.join(ids[i:i+10])), timeout = self.timeout)
             response = await asyncio.wait_for(self.api.talk(
                 '/ip/firewall/address-list/remove',
-                '=.id='+','.join(ids[i:i+1000])), timeout = self.timeout)
+                '=.id='+ids[i]), timeout = self.timeout)
         return ids
 
 
     async def flush(self, ip):
         ids = []
+        self.logger.debug(
+	    "{}: flush: Fetching ip addresses".format(self.address))
         response = await asyncio.wait_for(self.api.talk(
             '/ip/firewall/address-list/print',
             '=.proplist=.id',
@@ -95,7 +103,8 @@ class Router():
         if (removed_id):
             self.logger.debug("{}: deny {}".format(
                 self.address, ip))
-            self.logger.debug(removed_id)
+            self.logger.debug("{}: deny: removed id: {}".format(
+	        self.address, removed_id))
         else:
             self.logger.warning("{}: deny {} no such ip".format(
                 self.address, ip))
